@@ -36,4 +36,21 @@ ENV/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# PyTorch Lightning
+lightning_logs/
+checkpoints/
+example_predictions/
+
+# Model checkpoints
+*.ckpt
+*.pt
+*.pth
+*.bin
+
+# PyTorch model checkpoints
+*.ckpt
+*.pt
+*.pth
+*.bin 
