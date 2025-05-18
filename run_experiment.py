@@ -12,6 +12,8 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from typing import Optional, Tuple
+import argparse
+from datetime import datetime
 
 class LeafDataset(Dataset):
     def __init__(self, rootdir: str, leafnames: list, output_size_folded: Tuple[int, int] = (128, 128),
@@ -30,6 +32,9 @@ class LeafDataset(Dataset):
         leafname = self.leafnames[idx]
         folded_path = os.path.join(self.rootdir, f"{leafname}.JPG")
         straight_path = os.path.join(self.rootdir, f"{leafname}F_desdoblada.jpg")
+
+        # Print paths for debugging
+        print(f"Loading images from:\n{folded_path}\n{straight_path}")
 
         folded = cv2.imread(folded_path)
         straight = cv2.imread(straight_path)
@@ -99,11 +104,15 @@ class LeafDataset(Dataset):
         return padded_img
 
 class LeafDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str, batch_size: int = 32, num_workers: int = 4):
+    def __init__(self, data_dir: str, batch_size: int = 32, num_workers: int = 4, output_size_folded: Tuple[int, int] = (128, 128),
+                 output_size_straight: Tuple[int, int] = (256, 256), padding: int = 10):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.output_size_folded = output_size_folded
+        self.output_size_straight = output_size_straight
+        self.padding = padding
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
@@ -112,7 +121,11 @@ class LeafDataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         # Get list of leaf names (excluding the straightened versions)
         all_files = os.listdir(self.data_dir)
-        self.leafnames = [f.split('.')[0] for f in all_files if f.endswith('.JPG') and not f.endswith('F_desdoblada.jpg')]
+        # Use the same pattern as in visualization.py
+        self.leafnames = ['Brom01', 'Brom02', 'Brom03', 'Brom04', 'Brom05', 'Brom06']
+        
+        # Print found leafnames for debugging
+        print(f"Using leaf names: {self.leafnames}")
         
         # Split into train/val sets (80/20 split)
         np.random.shuffle(self.leafnames)
@@ -122,10 +135,12 @@ class LeafDataModule(pl.LightningDataModule):
 
         if stage == 'fit' or stage is None:
             self.train_dataset = LeafDataset(
-                self.data_dir, self.train_leafnames, transform=self.transform
+                self.data_dir, self.train_leafnames, output_size_folded=self.output_size_folded,
+                output_size_straight=self.output_size_straight, padding=self.padding, transform=self.transform
             )
             self.val_dataset = LeafDataset(
-                self.data_dir, self.val_leafnames, transform=self.transform
+                self.data_dir, self.val_leafnames, output_size_folded=self.output_size_folded,
+                output_size_straight=self.output_size_straight, padding=self.padding, transform=self.transform
             )
 
     def train_dataloader(self):
@@ -133,7 +148,8 @@ class LeafDataModule(pl.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            persistent_workers=True  # Add this to address the warning
         )
 
     def val_dataloader(self):
@@ -141,7 +157,8 @@ class LeafDataModule(pl.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            persistent_workers=True  # Add this to address the warning
         )
 
 class TimeEmbedding(nn.Module):
@@ -204,11 +221,20 @@ class DownBlock(nn.Module):
 class UpBlock(nn.Module):
     def __init__(self, in_channels, out_channels, time_channels):
         super().__init__()
+        # Adjust the output channels of upsampling to match skip connection
         self.up = nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1)
-        self.res = ResidualBlock(out_channels + out_channels, out_channels, time_channels)
+        # Add a 1x1 convolution to adjust skip connection channels
+        self.skip_conv = nn.Conv2d(in_channels, out_channels, 1)
+        # Input channels is now out_channels (from up) + out_channels (from skip)
+        self.res = ResidualBlock(out_channels * 2, out_channels, time_channels)
 
     def forward(self, x, skip, t):
         x = self.up(x)
+        # Ensure skip connection has the same spatial dimensions
+        if x.shape[2:] != skip.shape[2:]:
+            skip = F.interpolate(skip, size=x.shape[2:], mode='bilinear', align_corners=False)
+        # Adjust skip connection channels using 1x1 convolution
+        skip = self.skip_conv(skip)
         x = torch.cat([x, skip], dim=1)
         x = self.res(x, t)
         return x
@@ -221,9 +247,9 @@ class DiffusionModel(pl.LightningModule):
         self.save_examples_every_n_epochs = save_examples_every_n_epochs
         
         # Define beta schedule
-        self.beta = torch.linspace(beta_start, beta_end, n_steps)
-        self.alpha = 1 - self.beta
-        self.alpha_bar = torch.cumprod(self.alpha, dim=0)
+        self.register_buffer('beta', torch.linspace(beta_start, beta_end, n_steps))
+        self.register_buffer('alpha', 1 - self.beta)
+        self.register_buffer('alpha_bar', torch.cumprod(self.alpha, dim=0))
         
         # Time embedding
         time_channels = 256
@@ -267,10 +293,10 @@ class DiffusionModel(pl.LightningModule):
         # Middle
         x = self.middle(d3, t)
         
-        # Upsampling
-        x = self.up1(x, d3, t)
-        x = self.up2(x, d2, t)
-        x = self.up3(x, d1, t)
+        # Upsampling with skip connections
+        x = self.up1(x, d3, t)  # 512 -> 256
+        x = self.up2(x, d2, t)  # 256 -> 128
+        x = self.up3(x, d1, t)  # 128 -> 64
         
         # Final convolution
         x = self.final_conv(x)
@@ -307,9 +333,9 @@ class DiffusionModel(pl.LightningModule):
         """Save example predictions for a batch of images."""
         self.eval()
         with torch.no_grad():
-            # Select first image from batch
-            folded = folded[0:1]  # Keep batch dimension
-            straight = straight[0:1]
+            # Select first image from batch and move to correct device
+            folded = folded[0:1].to(self.device)  # Keep batch dimension
+            straight = straight[0:1].to(self.device)
             
             # Sample timesteps for visualization
             n_steps = 10  # Number of steps to visualize
@@ -325,14 +351,14 @@ class DiffusionModel(pl.LightningModule):
             folded_np = folded[0].permute(1, 2, 0).cpu().numpy()
             folded_np = (folded_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
             axes[0].imshow(folded_np)
-            axes[0].set_title('Folded')
+            axes[0].set_title('Input (Folded)')
             axes[0].axis('off')
             
             # Plot target straight image
             straight_np = straight[0].permute(1, 2, 0).cpu().numpy()
             straight_np = (straight_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
             axes[1].imshow(straight_np)
-            axes[1].set_title('Target')
+            axes[1].set_title('Target (Straight)')
             axes[1].axis('off')
             
             # Denoise step by step
@@ -344,7 +370,9 @@ class DiffusionModel(pl.LightningModule):
                 img_np = x_t[0].permute(1, 2, 0).cpu().numpy()
                 img_np = (img_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
                 axes[i + 2].imshow(img_np)
-                axes[i + 2].set_title(f't={t.item()}')
+                # Calculate progress percentage
+                progress = 100 * (1 - t.item() / (self.n_steps - 1))
+                axes[i + 2].set_title(f'Step {i+1}/{n_steps}\n({progress:.0f}% denoised)')
                 axes[i + 2].axis('off')
             
             plt.tight_layout()
@@ -399,25 +427,95 @@ class DiffusionModel(pl.LightningModule):
         """Save example predictions at the end of each epoch if needed."""
         if (self.current_epoch + 1) % self.save_examples_every_n_epochs == 0:
             # Get a batch from the validation dataloader
-            val_batch = next(iter(self.trainer.val_dataloaders[0]))
-            folded, straight = val_batch
-            self.save_example_predictions(folded, straight, self.current_epoch + 1)
+            val_dataloader = self.trainer.val_dataloaders
+            if val_dataloader:
+                val_batch = next(iter(val_dataloader))
+                folded, straight = val_batch
+                self.save_example_predictions(folded, straight, self.current_epoch + 1)
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train leaf unfolding diffusion model')
+    
+    # Model hyperparameters
+    parser.add_argument('--learning_rate', type=float, default=1e-4,
+                      help='Learning rate for the model')
+    parser.add_argument('--n_steps', type=int, default=1000,
+                      help='Number of diffusion steps')
+    parser.add_argument('--beta_start', type=float, default=1e-4,
+                      help='Starting beta value for noise schedule')
+    parser.add_argument('--beta_end', type=float, default=0.02,
+                      help='Ending beta value for noise schedule')
+    
+    # Training hyperparameters
+    parser.add_argument('--batch_size', type=int, default=4,
+                      help='Batch size for training')
+    parser.add_argument('--max_epochs', type=int, default=100,
+                      help='Maximum number of training epochs')
+    parser.add_argument('--save_examples_every_n_epochs', type=int, default=5,
+                      help='Save example predictions every N epochs')
+    
+    # Data hyperparameters
+    parser.add_argument('--folded_size', type=int, default=128,
+                      help='Size of folded leaf images')
+    parser.add_argument('--straight_size', type=int, default=256,
+                      help='Size of straightened leaf images')
+    parser.add_argument('--padding', type=int, default=300,
+                      help='Padding for leaf cropping')
+    
+    return parser.parse_args()
+
+def get_experiment_name(args):
+    """Generate experiment name based on hyperparameters."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name_parts = [
+        f"lr{args.learning_rate:.0e}",
+        f"steps{args.n_steps}",
+        f"bs{args.batch_size}",
+        f"folded{args.folded_size}",
+        f"straight{args.straight_size}"
+    ]
+    return f"{timestamp}_{'_'.join(name_parts)}"
 
 def main():
+    # Parse arguments
+    args = parse_args()
+    
     # Set random seed for reproducibility
     pl.seed_everything(42)
 
+    # Generate experiment name
+    experiment_name = get_experiment_name(args)
+    
+    # Create experiment directories
+    example_dir = os.path.join("example_predictions", experiment_name)
+    checkpoint_dir = os.path.join("checkpoints", experiment_name)
+    os.makedirs(example_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     # Initialize data module
     data_dir = os.path.join('data', "fotos hojas bromelias")
-    data_module = LeafDataModule(data_dir, batch_size=4)
+    data_module = LeafDataModule(
+        data_dir, 
+        batch_size=args.batch_size,
+        output_size_folded=(args.folded_size, args.folded_size),
+        output_size_straight=(args.straight_size, args.straight_size),
+        padding=args.padding
+    )
 
-    # Initialize model with example saving every 5 epochs
-    model = DiffusionModel(save_examples_every_n_epochs=5)
+    # Initialize model with hyperparameters
+    model = DiffusionModel(
+        learning_rate=args.learning_rate,
+        n_steps=args.n_steps,
+        beta_start=args.beta_start,
+        beta_end=args.beta_end,
+        save_examples_every_n_epochs=args.save_examples_every_n_epochs
+    )
+    model.example_dir = example_dir  # Update example directory
 
     # Setup logging and checkpointing
-    logger = TensorBoardLogger("lightning_logs", name="leaf_unfolding")
+    logger = TensorBoardLogger("lightning_logs", name=experiment_name)
     checkpoint_callback = ModelCheckpoint(
-        dirpath="checkpoints",
+        dirpath=checkpoint_dir,
         filename="leaf-unfolding-{epoch:02d}-{val_loss:.2f}",
         save_top_k=3,
         monitor="val_loss",
@@ -426,7 +524,7 @@ def main():
 
     # Initialize trainer
     trainer = Trainer(
-        max_epochs=100,
+        max_epochs=args.max_epochs,
         logger=logger,
         callbacks=[checkpoint_callback],
         accelerator="auto",
