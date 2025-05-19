@@ -39,9 +39,9 @@ ENV/
 Thumbs.db
 
 # PyTorch Lightning
-lightning_logs/
+# lightning_logs/
 checkpoints/
-example_predictions/
+#example_predictions/
 
 # Model checkpoints
 *.ckpt

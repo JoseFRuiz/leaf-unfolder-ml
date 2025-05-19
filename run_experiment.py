@@ -255,8 +255,8 @@ class DiffusionModel(pl.LightningModule):
         time_channels = 256
         self.time_embed = TimeEmbedding(time_channels)
         
-        # Initial convolution
-        self.init_conv = nn.Conv2d(3, 64, 3, padding=1)
+        # Initial convolution: now takes 6 channels (noisy + folded)
+        self.init_conv = nn.Conv2d(6, 64, 3, padding=1)
         
         # Downsampling path
         self.down1 = DownBlock(64, 128, time_channels)
@@ -278,29 +278,19 @@ class DiffusionModel(pl.LightningModule):
         self.example_dir = "example_predictions"
         os.makedirs(self.example_dir, exist_ok=True)
 
-    def forward(self, x, t):
-        # x: (B, 3, H, W), t: (B,)
+    def forward(self, x_t, t, folded):
+        # Concatenate noisy image and folded image along channel dimension
+        x = torch.cat([x_t, folded], dim=1)  # (B, 6, H, W)
         t = self.time_embed(t)  # (B, time_channels)
-        
-        # Initial convolution
         x = self.init_conv(x)
-        
-        # Downsampling
         d1 = self.down1(x, t)
         d2 = self.down2(d1, t)
         d3 = self.down3(d2, t)
-        
-        # Middle
         x = self.middle(d3, t)
-        
-        # Upsampling with skip connections
-        x = self.up1(x, d3, t)  # 512 -> 256
-        x = self.up2(x, d2, t)  # 256 -> 128
-        x = self.up3(x, d1, t)  # 128 -> 64
-        
-        # Final convolution
+        x = self.up1(x, d3, t)
+        x = self.up2(x, d2, t)
+        x = self.up3(x, d1, t)
         x = self.final_conv(x)
-        
         return x
 
     def get_noisy_image(self, x_0, t):
@@ -330,51 +320,38 @@ class DiffusionModel(pl.LightningModule):
         return x_t_minus_1
 
     def save_example_predictions(self, folded, straight, epoch):
-        """Save example predictions for a batch of images."""
         self.eval()
         with torch.no_grad():
-            # Select first image from batch and move to correct device
-            folded = folded[0:1].to(self.device)  # Keep batch dimension
+            folded = folded[0:1].to(self.device)
             straight = straight[0:1].to(self.device)
-            
-            # Sample timesteps for visualization
-            n_steps = 10  # Number of steps to visualize
+            n_steps = 10
             timesteps = self.sample_timesteps(n_steps)
-            
-            # Start from pure noise
-            x_t = torch.randn_like(folded)
-            
-            # Create figure for this example
+            x_t = torch.randn_like(straight)
             fig, axes = plt.subplots(1, n_steps + 2, figsize=(2 * (n_steps + 2), 2))
-            
-            # Plot input folded image
             folded_np = folded[0].permute(1, 2, 0).cpu().numpy()
-            folded_np = (folded_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
+            folded_np = (folded_np * 0.5 + 0.5).clip(0, 1)
             axes[0].imshow(folded_np)
             axes[0].set_title('Input (Folded)')
             axes[0].axis('off')
-            
-            # Plot target straight image
             straight_np = straight[0].permute(1, 2, 0).cpu().numpy()
-            straight_np = (straight_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
+            straight_np = (straight_np * 0.5 + 0.5).clip(0, 1)
             axes[1].imshow(straight_np)
             axes[1].set_title('Target (Straight)')
             axes[1].axis('off')
-            
-            # Denoise step by step
             for i, t in enumerate(timesteps):
                 t_batch = t.repeat(folded.shape[0])
-                x_t = self.denoise_step(x_t, t_batch)
-                
-                # Plot intermediate result
+                predicted_noise = self(x_t, t_batch, folded)
+                alpha_t = self.alpha[t].view(-1, 1, 1, 1)
+                alpha_bar_t = self.alpha_bar[t].view(-1, 1, 1, 1)
+                beta_t = self.beta[t].view(-1, 1, 1, 1)
+                noise = torch.randn_like(x_t) if t[0] > 0 else torch.zeros_like(x_t)
+                x_t = (1 / torch.sqrt(alpha_t)) * (x_t - (beta_t / torch.sqrt(1 - alpha_bar_t)) * predicted_noise) + torch.sqrt(beta_t) * noise
                 img_np = x_t[0].permute(1, 2, 0).cpu().numpy()
-                img_np = (img_np * 0.5 + 0.5).clip(0, 1)  # Denormalize
-                axes[i + 2].imshow(img_np)
-                # Calculate progress percentage
+                img_np = (img_np * 0.5 + 0.5).clip(0, 1)
                 progress = 100 * (1 - t.item() / (self.n_steps - 1))
+                axes[i + 2].imshow(img_np)
                 axes[i + 2].set_title(f'Step {i+1}/{n_steps}\n({progress:.0f}% denoised)')
                 axes[i + 2].axis('off')
-            
             plt.tight_layout()
             plt.savefig(os.path.join(self.example_dir, f'epoch_{epoch:04d}.png'))
             plt.close()
@@ -383,40 +360,20 @@ class DiffusionModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         folded, straight = batch
         batch_size = folded.shape[0]
-        
-        # Sample random timesteps
         t = torch.randint(0, self.n_steps, (batch_size,), device=self.device)
-        
-        # Get noisy image and noise
         x_t, noise = self.get_noisy_image(straight, t)
-        
-        # Predict noise
-        predicted_noise = self(x_t, t)
-        
-        # Calculate loss
+        predicted_noise = self(x_t, t, folded)
         loss = F.mse_loss(predicted_noise, noise)
-        
-        # Log loss
         self.log('train_loss', loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         folded, straight = batch
         batch_size = folded.shape[0]
-        
-        # Sample random timesteps
         t = torch.randint(0, self.n_steps, (batch_size,), device=self.device)
-        
-        # Get noisy image and noise
         x_t, noise = self.get_noisy_image(straight, t)
-        
-        # Predict noise
-        predicted_noise = self(x_t, t)
-        
-        # Calculate loss
+        predicted_noise = self(x_t, t, folded)
         loss = F.mse_loss(predicted_noise, noise)
-        
-        # Log loss
         self.log('val_loss', loss, prog_bar=True)
         return loss
 
@@ -517,7 +474,7 @@ def main():
     checkpoint_callback = ModelCheckpoint(
         dirpath=checkpoint_dir,
         filename="leaf-unfolding-{epoch:02d}-{val_loss:.2f}",
-        save_top_k=3,
+        save_top_k=1,
         monitor="val_loss",
         mode="min"
     )
