@@ -1,0 +1,14 @@
+GPU Driver '550' detected
+[rank: 0] Seed set to 42
+Traceback (most recent call last):
+  File "run_experiment.py", line 538, in <module>
+    main() 
+  File "run_experiment.py", line 516, in main
+    logger = TensorBoardLogger("lightning_logs", name=experiment_name)
+  File "/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/loggers/tensorboard.py", line 96, in __init__
+    super().__init__(
+  File "/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/lightning_fabric/loggers/tensorboard.py", line 92, in __init__
+    raise ModuleNotFoundError(
+ModuleNotFoundError: Neither `tensorboard` nor `tensorboardX` is available. Try `pip install`ing either.
+Requirement 'tensorboardX' not met. HINT: Try running `pip install -U 'tensorboardX'`
+Requirement 'tensorboard' not met. HINT: Try running `pip install -U 'tensorboard'`
