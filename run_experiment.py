@@ -327,6 +327,9 @@ class DiffusionModel(pl.LightningModule):
             n_steps = 10
             timesteps = self.sample_timesteps(n_steps)
             x_t = torch.randn_like(straight)
+            # Ensure folded and x_t have the same spatial size
+            if folded.shape[2:] != x_t.shape[2:]:
+                folded = F.interpolate(folded, size=x_t.shape[2:], mode='bilinear', align_corners=False)
             fig, axes = plt.subplots(1, n_steps + 2, figsize=(2 * (n_steps + 2), 2))
             folded_np = folded[0].permute(1, 2, 0).cpu().numpy()
             folded_np = (folded_np * 0.5 + 0.5).clip(0, 1)
@@ -344,7 +347,7 @@ class DiffusionModel(pl.LightningModule):
                 alpha_t = self.alpha[t].view(-1, 1, 1, 1)
                 alpha_bar_t = self.alpha_bar[t].view(-1, 1, 1, 1)
                 beta_t = self.beta[t].view(-1, 1, 1, 1)
-                noise = torch.randn_like(x_t) if t[0] > 0 else torch.zeros_like(x_t)
+                noise = torch.randn_like(x_t) if t.item() > 0 else torch.zeros_like(x_t)
                 x_t = (1 / torch.sqrt(alpha_t)) * (x_t - (beta_t / torch.sqrt(1 - alpha_bar_t)) * predicted_noise) + torch.sqrt(beta_t) * noise
                 img_np = x_t[0].permute(1, 2, 0).cpu().numpy()
                 img_np = (img_np * 0.5 + 0.5).clip(0, 1)
@@ -355,6 +358,30 @@ class DiffusionModel(pl.LightningModule):
             plt.tight_layout()
             plt.savefig(os.path.join(self.example_dir, f'epoch_{epoch:04d}.png'))
             plt.close()
+
+            # Additional comparison plot: input, predicted, target
+            predicted_unfolded = x_t[0].permute(1, 2, 0).cpu().numpy()
+            predicted_unfolded = (predicted_unfolded * 0.5 + 0.5).clip(0, 1)
+            folded_np = folded[0].permute(1, 2, 0).cpu().numpy()
+            folded_np = (folded_np * 0.5 + 0.5).clip(0, 1)
+            straight_np = straight[0].permute(1, 2, 0).cpu().numpy()
+            straight_np = (straight_np * 0.5 + 0.5).clip(0, 1)
+            plt.figure(figsize=(12, 4))
+            plt.subplot(1, 3, 1)
+            plt.imshow(folded_np)
+            plt.title('Input (Folded)')
+            plt.axis('off')
+            plt.subplot(1, 3, 2)
+            plt.imshow(predicted_unfolded)
+            plt.title('Predicted (Unfolded)')
+            plt.axis('off')
+            plt.subplot(1, 3, 3)
+            plt.imshow(straight_np)
+            plt.title('Target (Straight)')
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.example_dir, f'comparison_epoch_{epoch:04d}.png'))
+            plt.close()
         self.train()
 
     def training_step(self, batch, batch_idx):
@@ -362,6 +389,9 @@ class DiffusionModel(pl.LightningModule):
         batch_size = folded.shape[0]
         t = torch.randint(0, self.n_steps, (batch_size,), device=self.device)
         x_t, noise = self.get_noisy_image(straight, t)
+        # Ensure folded and x_t have the same spatial size
+        if folded.shape[2:] != x_t.shape[2:]:
+            folded = F.interpolate(folded, size=x_t.shape[2:], mode='bilinear', align_corners=False)
         predicted_noise = self(x_t, t, folded)
         loss = F.mse_loss(predicted_noise, noise)
         self.log('train_loss', loss, prog_bar=True)
@@ -372,6 +402,9 @@ class DiffusionModel(pl.LightningModule):
         batch_size = folded.shape[0]
         t = torch.randint(0, self.n_steps, (batch_size,), device=self.device)
         x_t, noise = self.get_noisy_image(straight, t)
+        # Ensure folded and x_t have the same spatial size
+        if folded.shape[2:] != x_t.shape[2:]:
+            folded = F.interpolate(folded, size=x_t.shape[2:], mode='bilinear', align_corners=False)
         predicted_noise = self(x_t, t, folded)
         loss = F.mse_loss(predicted_noise, noise)
         self.log('val_loss', loss, prog_bar=True)
