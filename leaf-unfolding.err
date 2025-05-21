@@ -9,7 +9,7 @@ LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
   | Name       | Type          | Params | Mode 
 -----------------------------------------------------
 0 | time_embed | TimeEmbedding | 66.3 K | train
-1 | init_conv  | Conv2d        | 1.8 K  | train
+1 | init_conv  | Conv2d        | 3.5 K  | train
 2 | down1      | DownBlock     | 410 K  | train
 3 | down2      | DownBlock     | 1.6 M  | train
 4 | down3      | DownBlock     | 6.2 M  | train
@@ -22,11 +22,11 @@ LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
 18.6 M    Trainable params
 0         Non-trainable params
 18.6 M    Total params
-74.449    Total estimated model params size (MB)
+74.456    Total estimated model params size (MB)
 78        Modules in train mode
 0         Modules in eval mode
 SLURM auto-requeueing enabled. Setting signal handlers.
 /home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 4 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
   warnings.warn(_create_warning_msg(
 /home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/loops/fit_loop.py:298: The number of training batches (1) is smaller than the logging interval Trainer(log_every_n_steps=50). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
-slurmstepd: error: *** JOB 2629590 ON c0907a-s17 CANCELLED AT 2025-05-19T09:56:55 ***
+slurmstepd: error: *** JOB 2646293 ON c1009a-s17 CANCELLED AT 2025-05-21T11:06:51 ***

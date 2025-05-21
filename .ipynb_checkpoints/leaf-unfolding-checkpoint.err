@@ -1,0 +1,31 @@
+GPU Driver '550' detected
+[rank: 0] Seed set to 42
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+You are using a CUDA device ('NVIDIA A100-SXM4-80GB') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name       | Type          | Params | Mode 
+-----------------------------------------------------
+0 | time_embed | TimeEmbedding | 66.3 K | train
+1 | init_conv  | Conv2d        | 3.5 K  | train
+2 | down1      | DownBlock     | 410 K  | train
+3 | down2      | DownBlock     | 1.6 M  | train
+4 | down3      | DownBlock     | 6.2 M  | train
+5 | middle     | ResidualBlock | 4.9 M  | train
+6 | up1        | UpBlock       | 4.2 M  | train
+7 | up2        | UpBlock       | 1.1 M  | train
+8 | up3        | UpBlock       | 275 K  | train
+9 | final_conv | Conv2d        | 1.7 K  | train
+-----------------------------------------------------
+18.6 M    Trainable params
+0         Non-trainable params
+18.6 M    Total params
+74.456    Total estimated model params size (MB)
+78        Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 4 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/loops/fit_loop.py:298: The number of training batches (1) is smaller than the logging interval Trainer(log_every_n_steps=50). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
