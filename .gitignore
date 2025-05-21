@@ -53,4 +53,7 @@ checkpoints/
 *.ckpt
 *.pt
 *.pth
-*.bin leaf-unfolding.out
+*.bin
+
+# Large files
+leaf-unfolding.out
