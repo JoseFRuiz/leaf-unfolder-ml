@@ -30,8 +30,8 @@ python run_experiment.py \
     --beta_start 1e-4 \
     --beta_end 0.02 \
     --batch_size 8 \
-    --max_epochs 100000 \
-    --save_examples_every_n_epochs 1000 \
+    --max_epochs 100 \
+    --save_examples_every_n_epochs 10 \
     --folded_size 128 \
     --straight_size 256 \
     --padding 300

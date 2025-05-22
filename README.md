@@ -97,6 +97,33 @@ lightning_logs/
     └── events.out.tfevents.*
 ```
 
+### Monitoring Training with TensorBoard
+
+The training progress can be monitored using TensorBoard. The logs are automatically saved in the `lightning_logs/` directory. To visualize the training metrics:
+
+1. Install TensorBoard if not already installed:
+```bash
+pip install tensorboard
+```
+
+2. Launch TensorBoard:
+```bash
+tensorboard --logdir=lightning_logs
+```
+
+3. Open your web browser and navigate to:
+```
+http://localhost:6006
+```
+
+In TensorBoard, you can monitor:
+- Training and validation loss curves
+- Learning rate schedule
+- Model graph
+- Example predictions (if logged)
+
+You can also compare multiple training runs by selecting different experiments from the left sidebar.
+
 ## Model Architecture
 
 The model uses a U-Net architecture with:
