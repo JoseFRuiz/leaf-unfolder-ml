@@ -29,6 +29,8 @@ python run_unet_experiment.py \
     --batch_size 8 \
     --max_epochs 100 \
     --img_size 256 \
-    --padding 300
+    --padding 300 \
+    --save_examples_every_n_epochs 10 \
+    --resume_from_checkpoint unet_checkpoints/unet-leaf-unfolding-epoch=99-val_loss=0.15.ckpt
 
 conda deactivate

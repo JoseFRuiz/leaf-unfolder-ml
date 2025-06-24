@@ -141,7 +141,7 @@ class UNetBlock(nn.Module):
         return self.conv(x)
 
 class SimpleUNet(pl.LightningModule):
-    def __init__(self, learning_rate=1e-4):
+    def __init__(self, learning_rate=1e-4, save_examples_every_n_epochs=1):
         super().__init__()
         self.save_hyperparameters()
         self.enc1 = UNetBlock(3, 64)
@@ -179,7 +179,7 @@ class SimpleUNet(pl.LightningModule):
         pred = self(folded)
         loss = F.mse_loss(pred, straight)
         self.log('val_loss', loss, prog_bar=True)
-        if batch_idx == 0:
+        if batch_idx == 0 and (self.current_epoch % self.hparams.save_examples_every_n_epochs == 0):
             self.save_example_predictions(folded, pred, straight, self.current_epoch)
         return loss
 
@@ -218,6 +218,8 @@ def parse_args():
     parser.add_argument('--max_epochs', type=int, default=100, help='Max epochs')
     parser.add_argument('--img_size', type=int, default=256, help='Image size')
     parser.add_argument('--padding', type=int, default=300, help='Padding for cropping')
+    parser.add_argument('--save_examples_every_n_epochs', type=int, default=1, help='Save example predictions every N epochs')
+    parser.add_argument('--resume_from_checkpoint', type=str, default=None, help='Path to a checkpoint to resume from')
     return parser.parse_args()
 
 def main():
@@ -231,7 +233,7 @@ def main():
         padding=args.padding,
         num_workers=0  # Set to 0 for debugging
     )
-    model = SimpleUNet(learning_rate=args.learning_rate)
+    model = SimpleUNet(learning_rate=args.learning_rate, save_examples_every_n_epochs=args.save_examples_every_n_epochs)
     logger = TensorBoardLogger("unet_logs", name="leaf_unfolding_unet")
     checkpoint_callback = ModelCheckpoint(
         dirpath="unet_checkpoints",
@@ -247,7 +249,7 @@ def main():
         accelerator="auto",
         devices="auto"
     )
-    trainer.fit(model, data_module)
+    trainer.fit(model, data_module, ckpt_path=args.resume_from_checkpoint)
 
 if __name__ == "__main__":
     main() 
