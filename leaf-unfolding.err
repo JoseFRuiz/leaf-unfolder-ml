@@ -1,32 +1,31 @@
-GPU Driver '550' detected
+GPU Driver '570' detected
 [rank: 0] Seed set to 42
 GPU available: True (cuda), used: True
 TPU available: False, using: 0 TPU cores
 HPU available: False, using: 0 HPUs
-You are using a CUDA device ('NVIDIA A100-SXM4-80GB') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/callbacks/model_checkpoint.py:654: Checkpoint directory /blue/azare/jruizmunoz/leaf-unfolder-ml/unet_checkpoints exists and is not empty.
+Restoring states from the checkpoint path at unet_checkpoints/unet-leaf-unfolding-epoch=197-val_loss=0.08.ckpt
+/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/utilities/migration/utils.py:56: The loaded checkpoint was produced with Lightning v2.5.2, which is newer than your current Lightning version: v2.4.0
 LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
 
-  | Name       | Type          | Params | Mode 
------------------------------------------------------
-0 | time_embed | TimeEmbedding | 66.3 K | train
-1 | init_conv  | Conv2d        | 3.5 K  | train
-2 | down1      | DownBlock     | 410 K  | train
-3 | down2      | DownBlock     | 1.6 M  | train
-4 | down3      | DownBlock     | 6.2 M  | train
-5 | middle     | ResidualBlock | 4.9 M  | train
-6 | up1        | UpBlock       | 4.2 M  | train
-7 | up2        | UpBlock       | 1.1 M  | train
-8 | up3        | UpBlock       | 275 K  | train
-9 | final_conv | Conv2d        | 1.7 K  | train
------------------------------------------------------
-18.6 M    Trainable params
+  | Name  | Type            | Params | Mode 
+--------------------------------------------------
+0 | enc1  | UNetBlock       | 39.0 K | train
+1 | enc2  | UNetBlock       | 221 K  | train
+2 | enc3  | UNetBlock       | 886 K  | train
+3 | pool  | MaxPool2d       | 0      | train
+4 | up2   | ConvTranspose2d | 131 K  | train
+5 | dec2  | UNetBlock       | 443 K  | train
+6 | up1   | ConvTranspose2d | 32.8 K | train
+7 | dec1  | UNetBlock       | 110 K  | train
+8 | final | Conv2d          | 195    | train
+--------------------------------------------------
+1.9 M     Trainable params
 0         Non-trainable params
-18.6 M    Total params
-74.456    Total estimated model params size (MB)
-78        Modules in train mode
+1.9 M     Total params
+7.462     Total estimated model params size (MB)
+44        Modules in train mode
 0         Modules in eval mode
+Restored all states from the checkpoint at unet_checkpoints/unet-leaf-unfolding-epoch=197-val_loss=0.08.ckpt
 SLURM auto-requeueing enabled. Setting signal handlers.
-/home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 4 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
-  warnings.warn(_create_warning_msg(
 /home/jruizmunoz/anaconda3/envs/audio-classification/lib/python3.8/site-packages/pytorch_lightning/loops/fit_loop.py:298: The number of training batches (1) is smaller than the logging interval Trainer(log_every_n_steps=50). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
-slurmstepd: error: *** JOB 2646293 ON c1009a-s17 CANCELLED AT 2025-05-21T11:06:51 ***
