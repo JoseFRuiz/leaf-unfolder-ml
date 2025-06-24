@@ -23,17 +23,12 @@ module load cuda/11.1
 
 source activate audio-classification
 
-# Run the experiment with optimized hyperparameters
-python run_experiment.py \
+# Run the U-Net experiment
+python run_unet_experiment.py \
     --learning_rate 1e-4 \
-    --n_steps 1000 \
-    --beta_start 1e-4 \
-    --beta_end 0.02 \
     --batch_size 8 \
     --max_epochs 100 \
-    --save_examples_every_n_epochs 10 \
-    --folded_size 128 \
-    --straight_size 256 \
+    --img_size 256 \
     --padding 300
 
 conda deactivate
