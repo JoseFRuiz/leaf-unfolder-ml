@@ -12,7 +12,7 @@
 #SBATCH --mem-per-cpu=20000mb
 #SBATCH --distribution=cyclic:cyclic
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:1
 #SBATCH --time=96:00:00
 
 echo "Date      = $(date)"
@@ -27,10 +27,10 @@ source activate audio-classification
 python run_unet_experiment.py \
     --learning_rate 1e-4 \
     --batch_size 8 \
-    --max_epochs 100 \
+    --max_epochs 10000 \
     --img_size 256 \
     --padding 300 \
-    --save_examples_every_n_epochs 10 \
-    --resume_from_checkpoint unet_checkpoints/unet-leaf-unfolding-epoch=99-val_loss=0.15.ckpt
+    --save_examples_every_n_epochs 100 \
+    --resume_from_checkpoint unet_checkpoints/unet-leaf-unfolding-epoch=197-val_loss=0.08.ckpt
 
 conda deactivate
